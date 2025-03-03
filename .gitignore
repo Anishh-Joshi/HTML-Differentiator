@@ -1,0 +1,56 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+*.env
+*.venv
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# macOS system files
+.DS_Store
+
+# Logs and database files
+*.log
+db.sqlite3
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage reports
+htmlcov/
+.coverage
+*.cover
+*.py,cover
+
+# pip, pipenv, poetry
+pip-log.txt
+pip-delete-this-directory.txt
+poetry.lock
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# pytest
+.pytest_cache/
+
+# build files
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Docker
+*.dockerignore
+
+# Node (if using with Python)
+node_modules/
