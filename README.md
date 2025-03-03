@@ -13,7 +13,7 @@ Welcome to the **HTML Differentiator** repository! This Python-based tool helps 
 
 1. **Clone this repository**:
    ```bash
-   git clone https://github.com/your-username/html-differentiator.git
+   git clone https://github.com/anishh-joshi/html-differentiator.git
 
 2.	**Virtual Environment Setup**:
     ```bash
