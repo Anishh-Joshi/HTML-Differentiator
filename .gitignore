@@ -9,6 +9,7 @@ venv/
 *.env
 *.venv
 
+.gitignore
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
