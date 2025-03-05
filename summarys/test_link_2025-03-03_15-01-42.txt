@@ -1,5 +1,0 @@
-- "Home" has been changed to "Dashboard"
-- "Portfolio" has been changed to "My Work"
-- "Office" has been changed to "Team"
-- "Me US" has been changed to "Contact US"
-- Added text: "This is An Addition"

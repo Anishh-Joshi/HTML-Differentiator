@@ -1,6 +1,6 @@
 from openai import OpenAI
 import difflib
-import os
+import os,requests
 from datetime import datetime
 from bs4 import BeautifulSoup
 import time
@@ -50,7 +50,7 @@ def highlight_differences(old_html, latest_html):
 
 def summarize_changes(diff_text):
     prompt = (
-        "Summarize only the differences in the actual textual content, ignoring any changes in HTML structure, tags, divs, spans, classes, ids, styles, or UI components. "
+        "Summarize only the differences in the actual textual content (Immigration Related issues only), ignoring any changes in HTML structure, tags, divs, spans, classes, ids, styles, or UI components. "
         "Only focus on changes in visible text that a user would read on the webpage. "
         "Do not mention modifications to code, formatting, or layout. Present the summary in bullet points:\n\n"
         f"{diff_text}"
@@ -65,8 +65,8 @@ def summarize_changes(diff_text):
 def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-def get_latest_test_link_file():
-    files = glob.glob("html_runs/test_link_*.html")
+def get_latest_test_link_file(link):
+    files = glob.glob(f"html_runs/{link}_*.html")
     if not files:
         return None
     return max(files, key=os.path.getctime)
@@ -81,23 +81,63 @@ def cleanup_old_files(directory, prefix, keep=3):
         os.remove(file)
         print(f"Deleted old file: {file}")
 
+def download_html_from_link(url):
+    """Download HTML content from the provided link."""
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad status codes
+        return response.text
+    except requests.RequestException as e:
+        print(f"Failed to download HTML from {url}: {e}")
+        return None
+    
+
+def remove_slashes(link):
+    return link.replace("/", "")
+
+def prune_old_files(sanitised_link):
+    cleanup_old_files("differences", f"{sanitised_link}_")
+    cleanup_old_files("html_runs", f"{sanitised_link}_")
+    cleanup_old_files("summarys", f"{sanitised_link}_")
+    cleanup_old_files("raw_diff", f"{sanitised_link}_")
+
 def initate_cron():
     os.makedirs("html_runs", exist_ok=True)
     os.makedirs("differences", exist_ok=True)
     os.makedirs("raw_diff", exist_ok=True)
     os.makedirs("summarys", exist_ok=True)
+    timestamp = get_timestamp()
     
-    existing_file = get_latest_test_link_file()
-    file1 = existing_file or 'file2.html'
-    file2 = 'file2.html'
-    print(f"Comparing {file1} with {file2}")
+    link = "https://golden-platinum-zephyr.glitch.me"
+    sanitised_link  = remove_slashes(link=link)
 
-    with open(file1, 'r', encoding='utf-8') as f1:
-        old_html = f1.read()
-    with open(file2, 'r', encoding='utf-8') as f2:
-        latest_html = f2.read()
+    existing_file = get_latest_test_link_file(link=sanitised_link)
     
-
+    # If no existing file, use the link itself
+    if not existing_file:
+        print("No existing file found. Using the link as the baseline.")
+        old_html = download_html_from_link(link)
+        if not old_html:
+            print("Failed to download HTML for comparison. Skipping this run.")
+            return
+        file2_save_path = f"html_runs/{sanitised_link}_{timestamp}.html"
+        
+        with open(file2_save_path, "w", encoding="utf-8") as file2_save:
+            file2_save.write(old_html)
+        print(f"Latest HTML saved to {file2_save_path}")
+    else:
+        # Read the existing file
+        with open(existing_file, 'r', encoding='utf-8') as f1:
+            old_html = f1.read()
+    
+    # Download the latest HTML
+    latest_html = download_html_from_link(link)
+    if not latest_html:
+        print("Failed to download the latest HTML. Skipping this run.")
+        return
+    
+    print(f"Comparing {existing_file} with {link}")
+    
     diff_html, raw_diff_html = highlight_differences(old_html, latest_html)
 
     if old_html.strip() == latest_html.strip():
@@ -105,9 +145,9 @@ def initate_cron():
         return
 
     timestamp = get_timestamp()
-    diff_filename = f"differences/test_link_{timestamp}.html"
-    file2_save_path = f"html_runs/test_link_{timestamp}.html"
-    raw_diff_path = f"raw_diff/test_link_{timestamp}.html"
+    diff_filename = f"differences/{sanitised_link}_{timestamp}.html"
+    file2_save_path = f"html_runs/{sanitised_link}_{timestamp}.html"
+    raw_diff_path = f"raw_diff/{sanitised_link}_{timestamp}.html"
 
     with open(diff_filename, "w", encoding="utf-8") as diff_file:
         diff_file.write(diff_html)
@@ -121,17 +161,15 @@ def initate_cron():
         raw_diff_file.write(raw_diff_html)
     print(f"Raw diff saved to {raw_diff_path}")
 
-    summary_save_path = f"summarys/test_link_{timestamp}.txt"
+    summary_save_path = f"summarys/{sanitised_link}_{timestamp}.txt"
     summary = summarize_changes(extract_body_content(raw_diff_html))
     with open(summary_save_path, "w", encoding="utf-8") as summaryFile:
         summaryFile.write(summary)
     print(f"Summary saved to {summary_save_path}")
+    prune_old_files(sanitised_link)
+    
 
-    cleanup_old_files("differences", "test_link_")
-    cleanup_old_files("html_runs", "test_link_")
-    cleanup_old_files("summarys", "test_link_")
-    cleanup_old_files("raw_diff", "test_link_")
-
+# Schedule the cron job
 schedule.every(10).seconds.do(initate_cron)
 
 if __name__ == "__main__":
