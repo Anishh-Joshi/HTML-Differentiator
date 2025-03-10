@@ -30,8 +30,8 @@ Welcome to the **HTML Differentiator** repository! This Python-based tool helps 
 
 5.	Run the script:
     Start the cron job to monitor the HTML files:
-     ```bash
-python app.py
+    ```bash
+    python app.py
     
 ## 📦 OR Use Docker
 1. **Clone this repository**:
