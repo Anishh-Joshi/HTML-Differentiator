@@ -31,7 +31,17 @@ Welcome to the **HTML Differentiator** repository! This Python-based tool helps 
 5.	Run the script:
     Start the cron job to monitor the HTML files:
      ```bash
-    python app.py
+python app.py
+    
+## 📦 OR Use Docker
+1. **Clone this repository**:
+    Create a .env file and set your apiKey for OpenAI:
+    ```bash
+    apiKey=YOUR_OPENAI_API_KEY
+    
+2. **Make Sure You Have Docker Installed, and run this command:**
+    ```bash
+    docker-compose up --build
 
 
 

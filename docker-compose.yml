@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  lambda-app:
+    build: .
+    env_file:
+      - .env  # This will load environment variables from the .env file
+    volumes:
+      - ./html_runs:/var/task/html_runs
+      - ./differences:/var/task/differences
+      - ./raw_diff:/var/task/raw_diff
+      - ./summarys:/var/task/summarys
+      - ./logs:/var/task/logs
