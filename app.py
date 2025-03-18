@@ -178,12 +178,15 @@ def upload_to_s3(file_content, s3_path):
     s3.put_object(Body=file_content, Bucket=s3_bucket, Key=s3_path)
     print(f"Uploaded {s3_path} to S3")
 
+def load_links_from_json(file_path):
+    with open(file_path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+    return list(data.values())  # Extract URLs from the JSON file
+
+
 def initiate_cron():
     # List of links to monitor
-    links = [
-        "https://golden-platinum-zephyr.glitch.me",
-        "https://docs.aws.amazon.com/lambda/latest/dg/python-image.html",
-    ]
+    links = load_links_from_json("urls.json")
     
     for link in links:
         sanitised_link = remove_slashes(link=link)
