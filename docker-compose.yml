@@ -4,7 +4,7 @@ services:
   lambda-app:
     build: .
     env_file:
-      - .env  # This will load environment variables from the .env file
+      - /home/$USER/.env
     volumes:
       - ./html_runs:/var/task/html_runs
       - ./differences:/var/task/differences
