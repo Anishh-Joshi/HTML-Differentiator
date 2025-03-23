@@ -1,33 +1,31 @@
-import boto3
-import os
-import requests
+from openai import OpenAI
 import difflib
-import json
+import os, requests, json
 from datetime import datetime
 from bs4 import BeautifulSoup
 import time
 import schedule
-from openai import OpenAI
-from botocore.exceptions import NoCredentialsError
-
-LOGS_KEY = "logs/logs.json" 
-
-# Initialize the S3 client with credentials and region
-s3 = boto3.client('s3', aws_access_key_id=os.environ.get("AWS_ACCESS_KEY"),
-                  aws_secret_access_key=os.environ.get("AWS_SECRET_KEY"), region_name='ca-central-1')
-
-# Define the S3 bucket name (you can change this to your own bucket)
-s3_bucket = 'html-differentiator'
+import glob
 
 client = OpenAI(api_key=os.environ.get("apiKey"))
+
+def clean_html(content):
+    if not content:
+        return None
+    soup = BeautifulSoup(content, 'html.parser')
+    for tag in soup(['script', 'style', 'noscript', 'meta']):
+        tag.decompose()
+    return str(soup)
 
 def extract_body_content(html):
     soup = BeautifulSoup(html, "html.parser")
     return soup.body if soup.body else soup
 
 def highlight_text_diff(text1, text2):
+    """Generates highlighted HTML diff for inline text changes."""
     diff = difflib.ndiff(text1.split(), text2.split())
     highlighted_text = []
+    
     for word in diff:
         if word.startswith("- "):
             highlighted_text.append(f'<span style="color: red; text-decoration: line-through;">{word[2:]}</span>')
@@ -35,6 +33,7 @@ def highlight_text_diff(text1, text2):
             highlighted_text.append(f'<span style="color: green;">{word[2:]}</span>')
         else:
             highlighted_text.append(word)
+    
     return " ".join(highlighted_text)
 
 def highlight_differences(old_html, latest_html):
@@ -75,172 +74,197 @@ def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 def get_latest_test_link_file(link):
-    # Use S3 instead of local file system
-    prefix = f"html_runs/{link}_"
-    response = s3.list_objects_v2(Bucket=s3_bucket, Prefix=prefix)
-    if 'Contents' not in response:
+    files = glob.glob(f"html_runs/{link}_*.html")
+    if not files:
         return None
-    latest_file = max(response['Contents'], key=lambda x: x['LastModified'])
-    return latest_file['Key']
+    return max(files, key=os.path.getctime)
 
-def cleanup_old_files(prefix, keep=3):
-    # List objects in the S3 bucket
-    response = s3.list_objects_v2(Bucket=s3_bucket, Prefix=prefix)
-    if 'Contents' not in response:
+def cleanup_old_files(directory, prefix, keep=3):
+    files = glob.glob(f"{directory}/{prefix}*")
+    if not files:
         return
     
-    # Sort by LastModified date
-    files = sorted(response['Contents'], key=lambda x: x['LastModified'])
+    files.sort(key=os.path.getctime)
     for file in files[:-keep]:
-        s3.delete_object(Bucket=s3_bucket, Key=file['Key'])
-        print(f"Deleted old file: {file['Key']}")
+        os.remove(file)
+        print(f"Deleted old file: {file}")
+
 
 def download_html_from_link(url):
+    """Download HTML content from the provided link."""
     try:
         response = requests.get(url)
-        response.raise_for_status()
+        response.raise_for_status() 
         return response.text
     except requests.RequestException as e:
         print(f"Failed to download HTML from {url}: {e}")
         return None
 
+
 def remove_slashes(link):
     return link.replace("/", "")
 
+
 def prune_old_files(sanitised_link):
-    cleanup_old_files(f"differences/{sanitised_link}_")
-    cleanup_old_files(f"html_runs/{sanitised_link}_")
-    cleanup_old_files(f"summarys/{sanitised_link}_")
-    cleanup_old_files(f"raw_diff/{sanitised_link}_")
+    cleanup_old_files("differences", f"{sanitised_link}_")
+    cleanup_old_files("html_runs", f"{sanitised_link}_")
+    cleanup_old_files("summarys", f"{sanitised_link}_")
+    cleanup_old_files("raw_diff", f"{sanitised_link}_")
+
 
 def extract_title(html):
+    """Extracts the title of the webpage from the HTML content."""
     soup = BeautifulSoup(html, "html.parser")
     title = soup.title.string if soup.title else "No Title"
     return title
 
+
 def log_to_json(link, timestamp, title):
     sanitised_link = remove_slashes(link)
     
-    try:
-        # Try to fetch the current logs from S3
-        try:
-            logs_file = s3.get_object(Bucket=s3_bucket, Key=LOGS_KEY)
-            logs = json.loads(logs_file['Body'].read().decode('utf-8'))
-        except s3.exceptions.NoSuchKey:
-            logs = []
+    # Load existing logs from logs.json
+    if os.path.exists("logs/logs.json"):
+        with open("logs/logs.json", "r", encoding="utf-8") as log_file:
+            logs = json.load(log_file)
+    else:
+        logs = []
+    
+    # Check if the link already exists in the logs
+    log_entry = next((entry for entry in logs if entry['id'] == sanitised_link), None)
+    if log_entry:
+        log_entry['last_updated_at'] = timestamp
+        log_entry['title'] = title 
+    else:
+        logs.append({
+            'id': sanitised_link,
+            'last_updated_at': timestamp,
+            'title': title  
+        })
+    
+    # Save the updated logs back to the JSON file
+    with open("logs/logs.json", "w", encoding="utf-8") as log_file:
+        json.dump(logs, log_file, indent=4)
 
-        # Check if the link already exists in the logs
-        log_entry = next((entry for entry in logs if entry['id'] == sanitised_link), None)
-        if log_entry:
-            log_entry['last_updated_at'] = timestamp
-            log_entry['title'] = title
-        else:
-            logs.append({
-                'id': sanitised_link,
-                'last_updated_at': timestamp,
-                'title': title
-            })
-
-        # Save the updated logs back to S3
-        s3.put_object(Bucket=s3_bucket, Key=LOGS_KEY, Body=json.dumps(logs, indent=4))
-
-    except NoCredentialsError:
-        print("AWS credentials not found. Please configure your credentials.")
-    except Exception as e:
-        print(f"Error updating logs in S3: {e}")
 
 def extract_updated_at(id):
-    try:
-        # Try to fetch the current logs from S3
-        logs_file = s3.get_object(Bucket=s3_bucket, Key=LOGS_KEY)
-        logs = json.loads(logs_file['Body'].read().decode('utf-8'))
+    if os.path.exists("logs/logs.json"):
+        with open("logs/logs.json", "r", encoding="utf-8") as log_file:
+            logs = json.load(log_file)
+    else:
+        logs = []
 
-        if len(logs) == 0:
-            return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-        for item in logs:
-            if item.get('id') == id:
-                return item.get("last_updated_at")
-        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    
-    except s3.exceptions.NoSuchKey:
-        print(f"Logs file not found in S3 bucket {s3_bucket}.")
-        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    except NoCredentialsError:
-        print("AWS credentials not found. Please configure your credentials.")
-        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    except Exception as e:
-        print(f"Error fetching logs from S3: {e}")
+    if len(logs) == 0:
         return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-def upload_to_s3(file_content, s3_path):
-    # Upload file to S3
-    s3.put_object(Body=file_content, Bucket=s3_bucket, Key=s3_path)
-    print(f"Uploaded {s3_path} to S3")
-
-def load_links_from_json(file_path):
-    with open(file_path, "r", encoding="utf-8") as file:
-        data = json.load(file)
-    return list(data.values())  # Extract URLs from the JSON file
+    for item in logs:
+        if item.get('id') == id:
+            return item.get("last_updated_at") 
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
 def initiate_cron():
+    os.makedirs("html_runs", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
+    os.makedirs("differences", exist_ok=True)
+    os.makedirs("raw_diff", exist_ok=True)
+    os.makedirs("summarys", exist_ok=True)
+    
     # List of links to monitor
-    links = load_links_from_json("urls.json")
+    links = [
+    "https://golden-platinum-zephyr.glitch.me",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/other-goals/mi7.html",
+    "https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-businesses/efile-electronic-filers/efile-news-program-updates.html",
+    "https://ircc.canada.ca/english/immigrate/skilled/crs-tool.js",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/publications-manuals/operational-bulletins-manuals.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/submit-profile/rounds-invitations.html",
+    "https://visa.vfsglobal.com/chn/zh/can/",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/application/application-forms-guides/guide-5772-application-sponsor-parents-grandparents.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/family-sponsorship/sponsor-parents-grandparents.html",
+    "https://www2.yrdsb.ca/schools-programs/international-student-programs",
+    "https://www2.yrdsb.ca/schools-programs/international-student-programs/admissions",
+    "https://www2.yrdsb.ca/schools-programs/international-student-programs/admissions/fee-schedule",
+    "https://www2.yrdsb.ca/schools-programs/international-student-programs/admissions/immigration-status",
+    "https://ircc.canada.ca/english/immigrate/skilled/crs-tool.asp",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/submit-profile/rounds-invitations.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/application/medical-police/police-certificates/how/hong-kong.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/application/medical-police/police-certificates/how/china.html",
+    "https://www.ontario.ca/page/2024-ontario-immigrant-nominee-program-updates",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/caregivers/child-care-home-support-worker.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/news/notices.html",
+    "https://www.canada.ca/en/immigration-refugees-citizenship/news.html"
+  ]
     
     for link in links:
         sanitised_link = remove_slashes(link=link)
         timestamp = get_timestamp()
         existing_file = get_latest_test_link_file(link=sanitised_link)
-
+        
+        # If no existing file, use the link itself
         if not existing_file:
             print(f"No existing file found for {link}. Using the link as the baseline.")
             old_html = download_html_from_link(link)
+            old_html = clean_html(old_html)
             if not old_html:
                 print(f"Failed to download HTML for {link}. Skipping this run.")
                 continue
-            # Upload to S3
             file2_save_path = f"html_runs/{sanitised_link}_{timestamp}.html"
-            upload_to_s3(old_html, file2_save_path)
-            print(f"Latest HTML for {link} uploaded to S3 at {file2_save_path}")
+            
+            with open(file2_save_path, "w", encoding="utf-8") as file2_save:
+                print("Saving HTML...")
+                file2_save.write(old_html)
+            print(f"Latest HTML for {link} saved to {file2_save_path}")
         else:
-            # Read the existing file from S3
-            response = s3.get_object(Bucket=s3_bucket, Key=existing_file)
-            old_html = response['Body'].read().decode('utf-8')
-
+            # Read the existing file
+            with open(existing_file, 'r', encoding='utf-8') as f1:
+                old_html = f1.read()
+        
         # Download the latest HTML
         latest_html = download_html_from_link(link)
+        latest_html = clean_html(latest_html)
+        if not latest_html:
+            continue
         title = extract_title(latest_html)
         if not latest_html:
             print(f"Failed to download the latest HTML for {link}. Skipping this run.")
             continue
-
+        
         print(f"Comparing {existing_file} with {link}")
-
+        
         diff_html, raw_diff_html = highlight_differences(old_html, latest_html)
 
-        if old_html.strip() == latest_html.strip():
+        if not raw_diff_html.strip():
             print(f"No differences found for {link}. Skipping file generation.")
             old_time_stamp = extract_updated_at(id=sanitised_link)
             log_to_json(link, timestamp=old_time_stamp, title=title)
             continue
         else:
-            # Upload diff and raw diff files to S3
             diff_filename = f"differences/{sanitised_link}_{timestamp}.html"
             file2_save_path = f"html_runs/{sanitised_link}_{timestamp}.html"
             raw_diff_path = f"raw_diff/{sanitised_link}_{timestamp}.html"
             log_to_json(link, timestamp=datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), title=title)
 
-            upload_to_s3(diff_html, diff_filename)
-            upload_to_s3(latest_html, file2_save_path)
-            upload_to_s3(raw_diff_html, raw_diff_path)
+            
 
-            # Upload summary to S3
-            summary_save_path = f"summarys/{sanitised_link}_{timestamp}.txt"
+            with open(file2_save_path, "w", encoding="utf-8") as file2_save:
+                file2_save.write(latest_html)
+            print(f"File2 for {link} saved to {file2_save_path}")
+            
+            
+            with open(diff_filename, "w", encoding="utf-8") as diff_file:
+                diff_file.write(diff_html)
+            print(f"Diff for {link} saved to {diff_filename}")
+                
+            with open(raw_diff_path, "w", encoding="utf-8") as raw_diff_file:
+                raw_diff_file.write(raw_diff_html)
+            print(f"Raw diff for {link} saved to {raw_diff_path}")
+
+            """ summary_save_path = f"summarys/{sanitised_link}_{timestamp}.txt"
             summary = summarize_changes(extract_body_content(raw_diff_html))
-            upload_to_s3(summary, summary_save_path)
-            print(f"Summary for {link} saved to S3 at {summary_save_path}")
-
+            with open(summary_save_path, "w", encoding="utf-8") as summaryFile:
+                summaryFile.write(summary)
+            print(f"Summary for {link} saved to {summary_save_path}") """
+            
             prune_old_files(sanitised_link)
 
 # Schedule the cron job
