@@ -33,7 +33,8 @@ def delete_folders():
         "logs/",
         "differences/",
         "raw_diff/",
-        "summarys/"
+        "summarys/",
+        "master_summary"
     ]
     
     for prefix in prefixes:
