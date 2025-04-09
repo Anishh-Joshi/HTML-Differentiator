@@ -12,3 +12,4 @@ services:
       - ./raw_diff:/var/task/raw_diff
       - ./summarys:/var/task/summarys
       - ./logs:/var/task/logs
+    restart: always  
