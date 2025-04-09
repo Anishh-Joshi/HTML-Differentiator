@@ -187,6 +187,8 @@ def load_links_from_json(file_path):
 def initiate_cron():
     # List of links to monitor
     links = load_links_from_json("urls.json")
+    master_timestamp = get_timestamp()
+    master_summary_content = []
     
     for link in links:
         sanitised_link = remove_slashes(link=link)
@@ -240,11 +242,16 @@ def initiate_cron():
             summary = summarize_changes(extract_body_content(raw_diff_html))
             upload_to_s3(summary, summary_save_path)
             print(f"Summary for {link} saved to S3 at {summary_save_path}")
-
+            master_summary_content.append(f"------- {link} -------\n{summary}\n")
+            if master_summary_content:
+                final_summary = "\n".join(master_summary_content)
+                master_summary_path = f"master_summary/mastersummary_{master_timestamp}.txt"
+                upload_to_s3(final_summary, master_summary_path)
+                print(f"Master summary saved to S3 at {master_summary_path}")
             prune_old_files(sanitised_link)
 
 # Schedule the cron job
-schedule.every(10).seconds.do(initiate_cron)
+schedule.every(24).hours.do(initiate_cron)
 
 if __name__ == "__main__":
     print("Starting HTML diff monitoring. Press Ctrl+C to stop.")

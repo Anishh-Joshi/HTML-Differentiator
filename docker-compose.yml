@@ -8,6 +8,7 @@ services:
     volumes:
       - ./html_runs:/var/task/html_runs
       - ./differences:/var/task/differences
+      - ./master_summary:/var/task/master_summary
       - ./raw_diff:/var/task/raw_diff
       - ./summarys:/var/task/summarys
       - ./logs:/var/task/logs
