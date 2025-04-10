@@ -283,10 +283,14 @@ def initiate_cron():
             prune_old_files(sanitised_link)
 
 # Schedule the cron job
-schedule.every(10).seconds.do(initiate_cron)
+schedule.every(24).hours.do(initiate_cron)  # Now it will run every 24 hours
 
 if __name__ == "__main__":
     print("Starting HTML diff monitoring. Press Ctrl+C to stop.")
+    
+    # Run the first batch immediately
+    initiate_cron()
+    
     while True:
         schedule.run_pending()
         time.sleep(1)
