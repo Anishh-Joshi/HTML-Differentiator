@@ -1,4 +1,8 @@
-FROM python:3
+FROM python:3.9-bullseye
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory
 WORKDIR /var/task
