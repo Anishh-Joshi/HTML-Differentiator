@@ -540,9 +540,8 @@ def load_links_from_json(file_path):
         
         if STORAGE_TYPE == 's3':
             logger.debug("Loading from S3")
-            s3 = boto3.client('s3')
             try:
-                response = s3.get_object(Bucket='html-differentiator', Key='urls.json')
+                response = s3_client.get_object(Bucket='html-differentiator', Key='urls.json')
                 file_content = response['Body'].read().decode('utf-8')
                 links = json.loads(file_content)
                 logger.info(f"Successfully loaded {len(links)} links from S3")
