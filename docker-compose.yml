@@ -10,6 +10,8 @@ services:
       - ./differences:/var/task/differences
       - ./master_summary:/var/task/master_summary
       - ./raw_diff:/var/task/raw_diff
+      - ./master_summary_chinese:/var/task/master_summary_chinese
       - ./summarys:/var/task/summarys
+      - ./summarys_chinese/:/var/task/summary_chinese
       - ./logs:/var/task/logs
-    restart: always  
+    restart: always
