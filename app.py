@@ -10,6 +10,7 @@ import difflib
 from openai import OpenAI
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from model import ChangeSummarizer
 
 class S3LogHandler(logging.Handler):
     """Custom logging handler that uploads logs to S3"""
@@ -320,47 +321,6 @@ def highlight_differences(old_html, latest_html):
         logger.error(f"Failed to highlight differences: {str(e)}")
         raise
 
-def summarize_changes(diff_text):
-    """Generate summary of changes using OpenAI."""
-    try:
-        prompt = (
-            "Summarize only the differences in the actual textual content (Immigration Related issues only), ignoring any changes in HTML structure, tags, divs, spans, classes, ids, styles, or UI components. "
-            "Only focus on changes in visible text that a user would read on the webpage. "
-            "Do not mention modifications to code, formatting, or layout. Present the summary in bullet points:\n\n"
-            f"{diff_text}"
-        )
-        logger.info("Requesting summary from OpenAI...")
-        completion = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        summary = completion.choices[0].message.content
-        logger.info("Successfully generated summary from OpenAI")
-        return summary
-    except Exception as e:
-        logger.error(f"Failed to generate summary: {str(e)}")
-        raise
-
-def summarize_changes_chinese(diff_text):
-    """Generate Chinese summary of changes using OpenAI."""
-    try:
-        prompt = (
-            "Summarize (Explicitly in Chinese) only the differences in the actual textual content (Immigration Related issues only), ignoring any changes in HTML structure, tags, divs, spans, classes, ids, styles, or UI components. "
-            "Only focus on changes in visible text that a user would read on the webpage. "
-            "Do not mention modifications to code, formatting, or layout. Present the summary in bullet points:\n\n"
-            f"{diff_text}"
-        )
-        logger.info("Requesting Chinese summary from OpenAI...")
-        completion = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        summary = completion.choices[0].message.content
-        logger.info("Successfully generated Chinese summary from OpenAI")
-        return summary
-    except Exception as e:
-        logger.error(f"Failed to generate Chinese summary: {str(e)}")
-        raise
 
 def get_timestamp():
     """Get current timestamp in formatted string."""
@@ -446,7 +406,7 @@ def extract_title(html):
         logger.error(f"Failed to extract title from HTML: {str(e)}")
         return "No Title"
 
-def log_to_json(link, timestamp, title, chinese_title):
+def log_to_json(link, timestamp, title, chinese_title,url):
     """Log activity to JSON file."""
     try:
         sanitised_link = remove_slashes(link)
@@ -476,12 +436,14 @@ def log_to_json(link, timestamp, title, chinese_title):
             log_entry['last_updated_at'] = timestamp
             log_entry['title'] = title
             log_entry['title_zh'] = chinese_title
+            log_entry['url'] = url
             logger.debug(f"Updated existing log entry for {sanitised_link}")
         else:
             logs.append({
                 'id': sanitised_link,
                 'last_updated_at': timestamp,
                 'title': title,
+                'url':url,
                 'title_zh': chinese_title
             })
             logger.debug(f"Created new log entry for {sanitised_link}")
@@ -559,6 +521,8 @@ def load_links_from_json(file_path):
         raise
 
 def initiate_cron():
+
+    summarizer = ChangeSummarizer(logger,openai_client=client)
     try:
         logger.info("Initiating cron job")
         
@@ -613,7 +577,7 @@ def initiate_cron():
                 if not raw_diff_html.strip():
                     logger.info(f"No differences found for {link}. Skipping file generation.")
                     old_time_stamp = extract_updated_at(id=sanitised_link)
-                    log_to_json(link, timestamp=old_time_stamp, title=english_title, chinese_title=chinese_title)
+                    log_to_json(link, timestamp=old_time_stamp, title=english_title, chinese_title=chinese_title,url=link)
                     continue
                 else:
                     diff_filename = f"differences/{sanitised_link}_{timestamp}.html"
@@ -621,7 +585,7 @@ def initiate_cron():
                     raw_diff_path = f"raw_diff/{sanitised_link}_{timestamp}.html"
                     
                     log_to_json(link, timestamp=datetime.now().strftime("%Y-%m-%d_%H-%M-%S"), 
-                              title=english_title, chinese_title=chinese_title)
+                              title=english_title, chinese_title=chinese_title,url=link)
 
                     save_file(file2_save_path, latest_html)
                     save_file(diff_filename, diff_html)
@@ -630,11 +594,12 @@ def initiate_cron():
                     logger.info(f"Diff for {link} saved to {diff_filename}")
                     logger.info(f"Raw diff for {link} saved to {raw_diff_path}")
 
-                    summary = summarize_changes(extract_body_content(raw_diff_html))
+                    
+                    summary = summarizer.summarize_changes(extract_body_content(raw_diff_html))
                     summary_save_path = f"summarys/{sanitised_link}_{timestamp}.txt"
                     save_file(summary_save_path, summary)
 
-                    summary_chinese = summarize_changes_chinese(extract_body_content(raw_diff_html))
+                    summary_chinese =  summarizer.translate_text(summary)
                     summary_save_path_chinese = f"summarys_chinese/{sanitised_link}_{timestamp}.txt"
                     save_file(summary_save_path_chinese, summary_chinese)
 
