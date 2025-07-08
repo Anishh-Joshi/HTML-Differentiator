@@ -21,6 +21,20 @@ def remove_date_lines(html_content):
     )
     # Remove the matched pattern
     return pattern.sub('', html_content)
+
+def remove_search_lines(html_content):
+    """
+    Remove lines containing specific search terms in either <del> or <ins> tags.
+    Targets:
+    - Search Canada.ca
+    - Search IRCC
+    - Search CRA
+    """
+    pattern = re.compile(
+        r'<(del|ins)[^>]*>\s*Search (?:Canada\.ca|IRCC|CRA)\s*</\1>',
+        re.IGNORECASE
+    )
+    return pattern.sub('', html_content)
     
 class S3LogHandler(logging.Handler):
     """Custom logging handler that uploads logs to S3"""
@@ -584,6 +598,7 @@ def initiate_cron():
                 
                 diff_html, raw_diff_html = highlight_differences(old_html, latest_html)
                 raw_diff_html = remove_date_lines(raw_diff_html)
+                raw_diff_html = remove_search_lines(raw_diff_html)
 
                 if not raw_diff_html.strip():
                     logger.info(f"No differences found for {link}. Skipping file generation.")
