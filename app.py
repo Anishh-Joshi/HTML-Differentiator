@@ -11,7 +11,17 @@ from openai import OpenAI
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from model import ChangeSummarizer
+import re
 
+def remove_date_lines(html_content):
+    # Pattern to match exactly the date lines you want to remove
+    pattern = re.compile(
+        r'<del style="background-color: lightcoral;">\s*\d{4}-\d{2}-\d{2}\s*</del>\s*\n'
+        r'\s*<ins style="background-color: lightgreen;">\s*\d{4}-\d{2}-\d{2}\s*</ins>'
+    )
+    # Remove the matched pattern
+    return pattern.sub('', html_content)
+    
 class S3LogHandler(logging.Handler):
     """Custom logging handler that uploads logs to S3"""
     def __init__(self, bucket, key):
@@ -573,6 +583,7 @@ def initiate_cron():
                 logger.info(f"Comparing {existing_file if existing_file else 'new file'} with {link}")
                 
                 diff_html, raw_diff_html = highlight_differences(old_html, latest_html)
+                raw_diff_html = remove_date_lines(raw_diff_html)
 
                 if not raw_diff_html.strip():
                     logger.info(f"No differences found for {link}. Skipping file generation.")
