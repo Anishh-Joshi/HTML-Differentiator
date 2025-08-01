@@ -624,7 +624,7 @@ def initiate_cron():
                     logger.info(f"Raw diff for {link} saved to {raw_diff_path}")
 
                     
-                    summary = summarizer.summarize_changes(extract_body_content(insertions_only))
+                    summary = summarizer.summarize_changes(extract_body_content(raw_diff_html))
                     summary_save_path = f"summarys/{sanitised_link}_{timestamp}.txt"
                     save_file(summary_save_path, summary)
 
