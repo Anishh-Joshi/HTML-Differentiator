@@ -13,6 +13,8 @@ from logging.handlers import TimedRotatingFileHandler
 from model import ChangeSummarizer
 import re
 
+from utils import extract_ins_elements_only
+
 def remove_date_lines(html_content):
     # Pattern to match exactly the date lines you want to remove
     pattern = re.compile(
@@ -274,13 +276,13 @@ def delete_file(file_path):
         raise
 
 def clean_html(content):
-    """Clean HTML content by removing scripts, styles, etc."""
+    """Clean HTML content by removing scripts, styles, meta, and footer elements."""
     try:
         if not content:
             logger.warning("Empty content provided to clean_html")
             return None
         soup = BeautifulSoup(content, 'html.parser')
-        for tag in soup(['script', 'style', 'noscript', 'meta']):
+        for tag in soup(['script', 'style', 'noscript', 'meta', 'footer']):
             tag.decompose()
         logger.info("Successfully cleaned HTML content")
         return str(soup)
@@ -599,6 +601,7 @@ def initiate_cron():
                 diff_html, raw_diff_html = highlight_differences(old_html, latest_html)
                 raw_diff_html = remove_date_lines(raw_diff_html)
                 raw_diff_html = remove_search_lines(raw_diff_html)
+                insertions_only = extract_ins_elements_only(raw_diff_html)
 
                 if not raw_diff_html.strip():
                     logger.info(f"No differences found for {link}. Skipping file generation.")
@@ -621,7 +624,7 @@ def initiate_cron():
                     logger.info(f"Raw diff for {link} saved to {raw_diff_path}")
 
                     
-                    summary = summarizer.summarize_changes(extract_body_content(raw_diff_html))
+                    summary = summarizer.summarize_changes(extract_body_content(insertions_only))
                     summary_save_path = f"summarys/{sanitised_link}_{timestamp}.txt"
                     save_file(summary_save_path, summary)
 
