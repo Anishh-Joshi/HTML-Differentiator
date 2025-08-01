@@ -31,10 +31,9 @@ class ChangeSummarizer:
         Generate summary of changes focusing only on textual content differences.
         """
         prompt = (
-            "Summarize the top 5 updates in the actual textual content in the following HTML file regarding Canadian government policies, "
-            "ignoring any changes in HTML structure, tags, divs, spans, classes, ids, styles, or UI components. "
-            "Only focus on changes in visible text that a user would read on the webpage. "
-            "Do not mention modifications to code, formatting, or layout. Present the summary points starting with -.\n\n"
+            "You are an expert content analyst. Given the HTML content below, identify and summarize the top 5 visible textual updates "
+            "that would be meaningful to a user reading the webpage. Ignore structural or formatting changes such as HTML tags, classes, or styles. "
+            "Present the summary as bullet points starting with '-'. Here's the content:\n\n"
             f"{diff_text}"
         )
         return self._call_openai(prompt, "summary")
