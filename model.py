@@ -93,6 +93,8 @@ class ChangeSummarizer:
         """
         Ask the LLM to classify each sentence as Canadian immigration-related or not.
         """
+        numbered_sentences = "\n".join(f"{i+1}. {sent}" for i, sent in enumerate(sentences))
+
         prompt = (
             "Classify each sentence as either 'IMMIGRATION' or 'IGNORE'.\n"
             "IMMIGRATION means the sentence is relevant to Canadian immigration in any way. "
@@ -103,7 +105,7 @@ class ChangeSummarizer:
             "- Any updates that could affect immigration applicants, refugees, asylum seekers, or travelers to Canada\n"
             "IGNORE means it has no connection to Canadian immigration.\n\n"
             "Return results in the format: <index>. <label> (no extra text).\n\n"
-            + "\n".join(f"{i+1}. {sent}" for i, sent in enumerate(sentences))
+            f"{numbered_sentences}"
         )
 
         result = self._call_openai(prompt, "classification")
