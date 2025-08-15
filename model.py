@@ -26,22 +26,22 @@ class ChangeSummarizer:
         Generate immigration-only summary from an HTML diff string.
         """
         candidate_sentences = self._extract_changed_sentences(diff_text)
-        print(candidate_sentences)
 
         if not candidate_sentences:
             return "No visible immigration-related textual updates found."
 
         immigration_only = self._classify_with_llm(candidate_sentences)
-        print(immigration_only)
 
         if not immigration_only:
             return "No visible immigration-related textual updates found."
+
+        joined_changes = "\n".join(immigration_only)
 
         prompt = (
             "You are an immigration change analyst. Summarize visible textual updates that affect Canadian immigration applicants "
             "If there are no meaningful immigration updates, reply exactly: "
             "'No visible immigration-related textual updates found.'\n\n"
-            f"{'\n'.join(immigration_only)}"
+            f"{joined_changes}"
         )
 
         return self._call_openai(prompt, "summary")
