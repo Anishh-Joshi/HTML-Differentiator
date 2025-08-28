@@ -10,10 +10,11 @@ import difflib
 from openai import OpenAI
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from git_engine import generate_diff
 from model import ChangeSummarizer
 import re
 
-from utils import extract_ins_elements_only
+from utils import extract_ins_elements_only, extract_plain_text
 
 def remove_date_lines(html_content):
     # Pattern to match exactly the date lines you want to remove
@@ -138,6 +139,8 @@ logger.addHandler(console_handler)
 def ensure_local_storage():
     """Ensure local storage directories exist."""
     try:
+        os.makedirs(os.path.join("git_differences"), exist_ok=True)
+        os.makedirs(os.path.join("summarys_git"), exist_ok=True)
         os.makedirs(os.path.join("logs"), exist_ok=True)
         os.makedirs(os.path.join("system_logs"), exist_ok=True)
         os.makedirs(os.path.join("html_runs"), exist_ok=True)
@@ -568,7 +571,8 @@ def initiate_cron():
         for key, val in links.items():
             try:
                 link = val.get("url")
-                sanitised_link = remove_slashes(link=link)
+                title = val.get("english")
+                sanitised_link = title
                 timestamp = get_timestamp()
                 existing_file = get_latest_test_link_file(link=sanitised_link)
                 chinese_title = val.get("chinese")
@@ -592,17 +596,34 @@ def initiate_cron():
                 
                 latest_html = download_html_from_link(link)
                 latest_html = clean_html(latest_html)
+                latest_git_text = extract_plain_text(latest_html)
+                old_git_text = extract_plain_text(old_html)
+
+
                 if not latest_html:
                     logger.error(f"Failed to download latest HTML for {link}. Skipping.")
                     continue
 
                 logger.info(f"Comparing {existing_file if existing_file else 'new file'} with {link}")
-                
+                git_difference = generate_diff(old_git_text, latest_git_text)
                 diff_html, raw_diff_html = highlight_differences(old_html, latest_html)
                 raw_diff_html = remove_date_lines(raw_diff_html)
                 raw_diff_html = remove_search_lines(raw_diff_html)
-                insertions_only = extract_ins_elements_only(raw_diff_html)
 
+
+
+                # ✅ Only save if differences exist
+                if git_difference.strip():
+                   git_diff = f"git_differences/{title}_{timestamp}.html"
+                   save_file(git_diff, git_difference)
+                   summary_git = summarizer.summarize_changes(git_difference)
+                   summary_save_path = f"summarys_git/{sanitised_link}_{timestamp}.txt"
+                   save_file(summary_save_path, summary_git)
+
+                else:
+                    logger.info("No differences found, nothing saved.")
+
+                
                 if not raw_diff_html.strip():
                     logger.info(f"No differences found for {link}. Skipping file generation.")
                     old_time_stamp = extract_updated_at(id=sanitised_link)

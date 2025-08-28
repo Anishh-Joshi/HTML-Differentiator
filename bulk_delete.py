@@ -1,44 +1,27 @@
-import boto3
-from botocore.exceptions import ClientError
 import os
-
-# Initialize the S3 client
-s3 = boto3.client('s3', 
-                  aws_access_key_id=os.environ.get("AWS_ACCESS_KEY"),
-                  aws_secret_access_key=os.environ.get("AWS_SECRET_KEY"),
-                  region_name="ca-central-1")
-
-bucket_name = "html-differentiator" 
-
-def delete_files_in_s3_folder(prefix):
-    """Deletes all files in the S3 folder (prefix)."""
-    try:
-        # List objects with the given prefix
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-        
-        # If files exist, delete them
-        if 'Contents' in response:
-            for obj in response['Contents']:
-                s3.delete_object(Bucket=bucket_name, Key=obj['Key'])
-                print(f"Deleted file: {obj['Key']}")
-        else:
-            print(f"No files found with prefix {prefix}.")
-    
-    except ClientError as e:
-        print(f"Error accessing S3 or deleting files with prefix {prefix}: {e}")
-
-def delete_folders():
-    prefixes = [
-        "html_runs/",
-        "logs/",
-        "differences/",
-        "raw_diff/",
-        "summarys/",
-        "master_summary"
-    ]
-    
-    for prefix in prefixes:
-        delete_files_in_s3_folder(prefix)
-
+import shutil
 if __name__ == "__main__":
-    delete_folders()
+    if os.environ.get("STORAGE_TYPE")=='local':
+
+        # List of folders to delete
+        folders = [
+            "git_differences",
+            "summarys_git",
+            "logs",
+            "system_logs",
+            "html_runs",
+            "differences",
+            "summarys",
+            "raw_diff",
+            "master_summary",
+            "summarys_chinese",
+            "master_summary_chinese"
+        ]
+
+        for folder in folders:
+            if os.path.exists(folder):
+                shutil.rmtree(folder)  # Recursively deletes folder and contents
+                print(f"Deleted: {folder}")
+            else:
+                print(f"Not found (skipped): {folder}")
+
