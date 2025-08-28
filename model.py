@@ -2,7 +2,6 @@ import re
 from typing import List
 from bs4 import BeautifulSoup, NavigableString
 
-# ---------- PAGE BOILERPLATE FILTERS ----------
 SKIP_TAGS = {"header", "footer", "nav", "aside", "script", "style"}
 BOILERPLATE_CLASS_OR_ID = re.compile(
     r"(wb-inv|pagedetails|gc-main-footer|gc-sub-footer|gc-contextual|wtrmrk|breadcrumb|"
@@ -11,10 +10,6 @@ BOILERPLATE_CLASS_OR_ID = re.compile(
 )
 
 class ChangeSummarizer:
-    """
-    Summarizes visible textual changes from an HTML diff (<ins>/<del> tags).
-    No classification step — everything extracted is passed to the LLM summarizer.
-    """
 
     def __init__(self, logger, openai_client, model: str = "gpt-4o-mini"):
         self.logger = logger
@@ -40,9 +35,6 @@ class ChangeSummarizer:
         return self._call_openai(prompt, "summary")
 
     def translate_text(self, text: str, target_language: str = "Chinese") -> str:
-        """
-        Translate any given text to the target language while preserving formatting.
-        """
         prompt = (
             f"Translate the following text to {target_language} while strictly preserving "
             "all original formatting including line breaks, spacing, punctuation, and special characters. "

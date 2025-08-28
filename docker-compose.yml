@@ -6,6 +6,8 @@ services:
     env_file:
       - /home/$USER/.env
     volumes:
+      - ./git_differences:/var/task/git_differences
+      - ./summarys_git:/var/task/summarys_git
       - ./html_runs:/var/task/html_runs
       - ./differences:/var/task/differences
       - ./master_summary:/var/task/master_summary
